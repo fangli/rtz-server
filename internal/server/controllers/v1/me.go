@@ -1,13 +1,16 @@
 package v1
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 
+	"github.com/USA-RedDragon/rtz-server/internal/config"
 	"github.com/USA-RedDragon/rtz-server/internal/db/models"
 	v1 "github.com/USA-RedDragon/rtz-server/internal/server/apimodels/v1"
 	"github.com/USA-RedDragon/rtz-server/internal/utils"
@@ -56,7 +59,13 @@ func GETRouteFiles(c *gin.Context) {
 		c.Data(http.StatusOK, "application/json", bodyBytes)
 		return
 	}
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
+	cfg, ok := c.MustGet("config").(*config.Config)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Try again later"})
+		return
+	}
+	summary := summarizeUploadedRoute(cfg, deviceID, idParts[1])
+	c.JSON(http.StatusOK, summary.Files)
 }
 
 func GETAthenaOfflineQueue(c *gin.Context) {
@@ -109,7 +118,61 @@ func GETRouteQCameraM3U8(c *gin.Context) {
 		c.Data(http.StatusOK, "application/x-mpegURL", bodyBytes)
 		return
 	}
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Not implemented"})
+	cfg, ok := c.MustGet("config").(*config.Config)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Try again later"})
+		return
+	}
+	summary := summarizeUploadedRoute(cfg, deviceID, idParts[1])
+	if len(summary.QCameras) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No qcamera files uploaded"})
+		return
+	}
+
+	var route models.Route
+	db, ok := c.MustGet("db").(*gorm.DB)
+	if ok {
+		_ = db.Where("route_id = ?", routeNameBase(idParts[1])).First(&route).Error
+	}
+	startTimes, endTimes, _ := routeSegmentMetadata(route, summary.Segments)
+
+	var maxDuration int64 = defaultSegmentDurationMillis / 1000
+	var playlist bytes.Buffer
+	playlist.WriteString("#EXTM3U\n")
+	playlist.WriteString("#EXT-X-VERSION:3\n")
+	for _, file := range summary.QCameras {
+		idx := -1
+		for i, segment := range summary.Segments {
+			if segment == file.Segment {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
+			duration := int64(math.Ceil(float64(endTimes[idx]-startTimes[idx]) / 1000))
+			if duration > maxDuration {
+				maxDuration = duration
+			}
+		}
+	}
+	playlist.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", maxDuration))
+	playlist.WriteString("#EXT-X-MEDIA-SEQUENCE:0\n")
+	for _, file := range summary.QCameras {
+		duration := float64(defaultSegmentDurationMillis) / 1000
+		idx := -1
+		for i, segment := range summary.Segments {
+			if segment == file.Segment {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 && endTimes[idx] > startTimes[idx] {
+			duration = float64(endTimes[idx]-startTimes[idx]) / 1000
+		}
+		playlist.WriteString(fmt.Sprintf("#EXTINF:%.3f,\n%s\n", duration, file.URL))
+	}
+	playlist.WriteString("#EXT-X-ENDLIST\n")
+	c.Data(http.StatusOK, "application/x-mpegURL", playlist.Bytes())
 }
 
 func GETMe(c *gin.Context) {

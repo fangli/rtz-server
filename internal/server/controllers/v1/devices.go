@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/USA-RedDragon/rtz-server/internal/config"
 	"github.com/USA-RedDragon/rtz-server/internal/db/models"
 	v1 "github.com/USA-RedDragon/rtz-server/internal/server/apimodels/v1"
 	"github.com/USA-RedDragon/rtz-server/internal/utils"
@@ -261,32 +262,6 @@ func GETDeviceRoutesSegments(c *gin.Context) {
 		c.Data(http.StatusOK, "application/json", bodyBytes)
 		return
 	}
-	end := c.Query("end")
-	start := c.Query("start")
-	if end == "" || start == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "start and end are required"})
-		return
-	}
-	limit := c.DefaultQuery("limit", "5")
-
-	startInt, err := strconv.Atoi(start)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "start must be an integer"})
-		return
-	}
-	startTime := time.Unix(int64(startInt/1000), 0)
-	endInt, err := strconv.Atoi(end)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "end must be an integer"})
-		return
-	}
-	endTime := time.Unix(int64(endInt/1000), 0)
-	limitInt, err := strconv.Atoi(limit)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be an integer"})
-		return
-	}
-
 	dongleID, ok := c.Params.Get("dongle_id")
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "dongle_id is required"})
@@ -307,15 +282,74 @@ func GETDeviceRoutesSegments(c *gin.Context) {
 		return
 	}
 
-	routes, err := models.FindRoutesByDeviceIDAndTimeRange(db, device.ID, startTime, endTime, limitInt)
-	if err != nil {
-		slog.Error("Failed to find routes by device ID and time range", "error", err)
+	cfg, ok := c.MustGet("config").(*config.Config)
+	if !ok {
+		slog.Error("Failed to get config from context")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Try again later"})
 		return
 	}
 
+	routeStr := c.Query("route_str")
+	routes := []models.Route{}
+	if routeStr != "" {
+		routeParts := strings.Split(routeStr, "|")
+		if len(routeParts) != 2 || routeParts[0] != dongleID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "route_str must be in the format of <device_id>|<route>"})
+			return
+		}
+		routeID := routeNameBase(routeParts[1])
+		var route models.Route
+		err := db.Where("device_id = ? AND route_id = ?", device.ID, routeID).First(&route).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusOK, routes)
+				return
+			}
+			slog.Error("Failed to find route by route_str", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Try again later"})
+			return
+		}
+		routes = append(routes, route)
+	} else {
+		end := c.Query("end")
+		start := c.Query("start")
+		if end == "" || start == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "start and end are required"})
+			return
+		}
+		limit := c.DefaultQuery("limit", "5")
+
+		startInt, err := strconv.Atoi(start)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "start must be an integer"})
+			return
+		}
+		startTime := time.Unix(int64(startInt/1000), 0)
+		endInt, err := strconv.Atoi(end)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "end must be an integer"})
+			return
+		}
+		endTime := time.Unix(int64(endInt/1000), 0)
+		limitInt, err := strconv.Atoi(limit)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be an integer"})
+			return
+		}
+
+		routes, err = models.FindRoutesByDeviceIDAndTimeRange(db, device.ID, startTime, endTime, limitInt)
+		if err != nil {
+			slog.Error("Failed to find routes by device ID and time range", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Try again later"})
+			return
+		}
+	}
+
 	routeSegmentsResponse := []v1.RouteSegmentsResponse{}
 	for _, route := range routes {
+		uploaded := summarizeUploadedRoute(cfg, device.DongleID, route.RouteID)
+		segmentStartTimes, segmentEndTimes, segmentNumbers := routeSegmentMetadata(route, uploaded.Segments)
+
 		routeSegmentsResponse = append(routeSegmentsResponse, v1.RouteSegmentsResponse{
 			CAN:                true, // TODO: Implement
 			CreationTime:       route.CreatedAt.Unix(),
@@ -329,30 +363,30 @@ func GETDeviceRoutesSegments(c *gin.Context) {
 			GitCommit:          route.GitCommit,
 			GitDirty:           route.GitDirty,
 			GitRemote:          route.GitRemote,
-			FullName:           device.DongleID + "|" + route.RouteID + ":" + strconv.FormatInt(int64(route.ID), 10),
+			FullName:           device.DongleID + "|" + route.RouteID,
 			HPGPS:              false, // TODO: Implement
 			InitLogMonoTime:    route.InitLogMonoTime,
 			IsPreserved:        route.IsPreserved,
 			IsPublic:           route.IsPublic,
 			Length:             route.Length,
-			MaxCamera:          -1,    // TODO: Implement
-			MaxDCamera:         -1,    // TODO: Implement
-			MaxECamera:         -1,    // TODO: Implement
-			MaxLog:             -1,    // TODO: Implement
-			MaxQCamera:         -1,    // TODO: Implement
-			MaxQLog:            -1,    // TODO: Implement
+			MaxCamera:          uploaded.MaxByType["cameras"],
+			MaxDCamera:         uploaded.MaxByType["dcameras"],
+			MaxECamera:         uploaded.MaxByType["ecameras"],
+			MaxLog:             uploaded.MaxByType["logs"],
+			MaxQCamera:         uploaded.MaxByType["qcameras"],
+			MaxQLog:            uploaded.MaxByType["qlogs"],
 			Passive:            false, // TODO: Implement
 			Platform:           route.Platform,
-			ProcCamera:         -1, // TODO: Implement
-			ProcLog:            -1, // TODO: Implement
-			ProcQCamera:        -1, // TODO: Implement
-			ProcQLog:           -1, // TODO: Implement
+			ProcCamera:         uploaded.MaxByType["cameras"],
+			ProcLog:            uploaded.MaxByType["logs"],
+			ProcQCamera:        uploaded.MaxByType["qcameras"],
+			ProcQLog:           uploaded.MaxByType["qlogs"],
 			Radar:              route.Radar,
-			SegmentEndTimes:    []int64{}, // TODO: Implement
-			SegmentStartTimes:  []int64{}, // TODO: Implement
-			SegmentNumbers:     []int{},   // TODO: Implement
-			ShareExp:           "",        // TODO: Implement
-			ShareSig:           "",        // TODO: Implement
+			SegmentEndTimes:    segmentEndTimes,
+			SegmentStartTimes:  segmentStartTimes,
+			SegmentNumbers:     segmentNumbers,
+			ShareExp:           "", // TODO: Implement
+			ShareSig:           "", // TODO: Implement
 			StartLat:           route.StartLat,
 			StartLng:           route.StartLng,
 			StartTime:          route.StartTime.Format("2006-01-02T15:04:05"),
@@ -365,4 +399,8 @@ func GETDeviceRoutesSegments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, routeSegmentsResponse)
+}
+
+func GETDeviceRoutesPreserved(c *gin.Context) {
+	c.JSON(http.StatusOK, []string{})
 }
