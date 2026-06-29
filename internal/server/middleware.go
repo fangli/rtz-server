@@ -133,11 +133,8 @@ func requireCookieAuth(_ *config.Config) gin.HandlerFunc {
 		// Verify the token
 		token, err := jwt.NewParser(
 			jwt.WithLeeway(5*time.Minute),
-			jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Name})).
+			jwt.WithValidMethods(utils.DeviceJWTSigningMethods)).
 			ParseWithClaims(cookie, claims, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-					return nil, fmt.Errorf("invalid signing method: %s", token.Header["alg"])
-				}
 				claims, ok = token.Claims.(*jwt.RegisteredClaims)
 				if !ok {
 					return nil, errors.New("invalid claims")
@@ -240,12 +237,8 @@ func requireAuth(config *config.Config, authType AuthType) gin.HandlerFunc {
 					claims := new(utils.DeviceJWT)
 					_, err := jwt.NewParser(
 						jwt.WithLeeway(5*time.Minute),
-						jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Name}),
+						jwt.WithValidMethods(utils.DeviceJWTSigningMethods),
 					).ParseWithClaims(jwtString, claims, func(token *jwt.Token) (interface{}, error) {
-						if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-							dongleIDChan <- ""
-							return nil, fmt.Errorf("invalid signing method: %s", token.Header["alg"])
-						}
 						claims, ok = token.Claims.(*utils.DeviceJWT)
 						if !ok {
 							dongleIDChan <- ""

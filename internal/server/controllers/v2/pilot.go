@@ -38,11 +38,8 @@ func POSTPilotPair(c *gin.Context) {
 
 	token, err := jwt.NewParser(
 		jwt.WithLeeway(5*time.Minute),
-		jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Name})).
+		jwt.WithValidMethods(utils.DeviceJWTSigningMethods)).
 		ParseWithClaims(data.PairToken, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				slog.Error("Invalid signing method", "method", token.Header["alg"])
-			}
 			claims, ok = token.Claims.(*v2.PilotPairJWTClaims)
 			if !ok {
 				return nil, errors.New("invalid claims")
@@ -203,11 +200,8 @@ func POSTPilotAuth(c *gin.Context) {
 
 	token, err := jwt.NewParser(
 		jwt.WithLeeway(5*time.Minute),
-		jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Name})).
+		jwt.WithValidMethods(utils.DeviceJWTSigningMethods)).
 		ParseWithClaims(paramRegisterToken, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				slog.Error("Invalid signing method", "method", token.Header["alg"])
-			}
 			claims, ok = token.Claims.(*v2.RegisterJWTClaims)
 			if !ok {
 				return nil, errors.New("invalid claims")

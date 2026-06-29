@@ -20,6 +20,8 @@ type DeviceJWT struct {
 	Identity string `json:"identity"`
 }
 
+var DeviceJWTSigningMethods = []string{jwt.SigningMethodRS256.Name, jwt.SigningMethodES256.Name}
+
 func (u UserJWT) GetAudience() (jwt.ClaimStrings, error) {
 	return u.Audience, nil
 }
@@ -100,11 +102,8 @@ func VerifyDeviceJWT(did string, signingKey string, tokenString string) error {
 	claims := new(DeviceJWT)
 	token, err := jwt.NewParser(
 		jwt.WithLeeway(5*time.Minute),
-		jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Name})).
+		jwt.WithValidMethods(DeviceJWTSigningMethods)).
 		ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("invalid signing method: %s", token.Header["alg"])
-			}
 			var ok bool
 			claims, ok = token.Claims.(*DeviceJWT)
 			if !ok {

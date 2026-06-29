@@ -1,6 +1,9 @@
 package utils_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"testing"
@@ -198,6 +201,39 @@ func TestJWT(t *testing.T) {
 	err = utils.VerifyDeviceJWT("test", nonAssociatedPubkey, tokenStr)
 	if err == nil {
 		t.Error("expected error, got nil")
+	}
+}
+
+func TestVerifyDeviceJWTAcceptsES256(t *testing.T) {
+	t.Parallel()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	pub, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	pubPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pub}))
+
+	now := time.Now()
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, utils.DeviceJWT{
+		Identity: "test",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "test",
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now.Add(-30 * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		},
+	})
+	tokenStr, err := token.SignedString(key)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := utils.VerifyDeviceJWT("test", pubPEM, tokenStr); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
