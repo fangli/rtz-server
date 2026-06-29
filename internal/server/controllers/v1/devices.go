@@ -391,7 +391,7 @@ func GETDeviceRoutesSegments(c *gin.Context) {
 			StartLng:           route.StartLng,
 			StartTime:          route.StartTime.Format("2006-01-02T15:04:05"),
 			StartTimeUTCMillis: route.StartTime.UnixMilli(),
-			URL:                route.URL,
+			URL:                routeResponseURL(cfg, device.DongleID, route),
 			UserID:             device.OwnerID,
 			Version:            route.Version,
 			VIN:                "", // TODO: Implement

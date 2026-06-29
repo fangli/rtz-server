@@ -55,6 +55,28 @@ func GETUploadURL(c *gin.Context) {
 	})
 }
 
+func newRouteInfoFromPath(path string) (v1dot4.RouteInfo, bool) {
+	match := newRouteRegex.FindStringSubmatch(path)
+	if len(match) == 0 {
+		return v1dot4.RouteInfo{}, false
+	}
+
+	var result v1dot4.RouteInfo
+	routeSuffix := ""
+	for i, name := range newRouteRegex.SubexpNames() {
+		switch name {
+		case "motonic":
+			result.Motonic = match[i]
+		case "route":
+			routeSuffix = match[i]
+		case "segment":
+			result.Segment = match[i]
+		}
+	}
+	result.Route = result.Motonic + "--" + routeSuffix
+	return result, true
+}
+
 func PUTUpload(c *gin.Context) {
 	dongleID, ok := c.Params.Get("dongle_id")
 	if !ok {
@@ -172,18 +194,7 @@ func PUTUpload(c *gin.Context) {
 		}
 	case newRouteRegex.Match([]byte(path)):
 		slog.Warn("New route upload", "path", path)
-		match := newRouteRegex.FindStringSubmatch(path)
-		var result v1dot4.RouteInfo
-		for i, name := range newRouteRegex.SubexpNames() {
-			switch name {
-			case "motonic":
-				result.Motonic = match[i]
-			case "route":
-				result.Route = match[i]
-			case "segment":
-				result.Segment = match[i]
-			}
-		}
+		result, _ := newRouteInfoFromPath(path)
 
 		// Verify file type
 		switch {

@@ -190,12 +190,21 @@ func emptyRouteFiles() map[string][]string {
 }
 
 func routeFileURL(cfg *config.Config, dongleID, routeName string, segment int, fileName string) string {
-	return fmt.Sprintf("%s/v1/route_file/%s/%s/%d/%s",
+	return fmt.Sprintf("%s/%d/%s", routeFilesBaseURL(cfg, dongleID, routeName), segment, fileName)
+}
+
+func routeFilesBaseURL(cfg *config.Config, dongleID, routeName string) string {
+	return fmt.Sprintf("%s/v1/route_file/%s/%s",
 		strings.TrimRight(cfg.HTTP.BackendURL, "/"),
 		dongleID,
-		routeName,
-		segment,
-		fileName)
+		routeName)
+}
+
+func routeResponseURL(cfg *config.Config, dongleID string, route models.Route) string {
+	if route.URL != "" {
+		return route.URL
+	}
+	return routeFilesBaseURL(cfg, dongleID, route.RouteID)
 }
 
 func routeNameBase(routeName string) string {

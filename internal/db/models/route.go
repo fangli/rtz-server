@@ -8,33 +8,33 @@ import (
 )
 
 type Route struct {
-	ID                      uint      `json:"-" gorm:"primaryKey" binding:"required"`
-	DeviceID                uint      `json:"device_id" binding:"required" gorm:"uniqueIndex,OnUpdate:CASCADE,OnDelete:SET NULL"`
-	FirstClockWallTimeNanos uint64    `json:"-" binding:"required" gorm:"type:numeric"`
-	FirstClockLogMonoTime   uint64    `json:"-" binding:"required" gorm:"type:numeric"`
-	AllSegmentsProcessed    bool      `json:"-"`
-	RouteID                 string    `json:"id" binding:"required" gorm:"uniqueIndex"`
-	EndLat                  float64   `json:"end_lat"`
-	EndLng                  float64   `json:"end_lng"`
-	EndTime                 time.Time `json:"end_time"`
-	GitBranch               string    `json:"git_branch" binding:"required"`
-	GitCommit               string    `json:"git_commit" binding:"required"`
-	GitDirty                bool      `json:"git_dirty" binding:"required"`
-	GitRemote               string    `json:"git_remote" binding:"required"`
-	InitLogMonoTime         uint64    `json:"init_log_mono_time" binding:"required" gorm:"type:numeric"`
-	IsPreserved             bool      `json:"is_preserved"`
-	IsPublic                bool      `json:"is_public"`
-	Length                  float64   `json:"length"`
-	Platform                string    `json:"platform" binding:"required"`
-	Radar                   bool      `json:"radar"`
-	StartLat                float64   `json:"start_lat"`
-	StartLng                float64   `json:"start_lng"`
-	StartTime               time.Time `json:"start_time"`
-	URL                     string    `json:"url"`
-	Version                 string    `json:"version" binding:"required"`
-	SegmentStartTimes       []int64   `json:"segment_start_times" gorm:"type:bigint[]"`
-	SegmentEndTimes         []int64   `json:"segment_end_times" gorm:"type:bigint[]"`
-	SegmentNumbers          []int64   `json:"segment_numbers" gorm:"type:bigint[]"`
+	ID                      uint       `json:"-" gorm:"primaryKey" binding:"required"`
+	DeviceID                uint       `json:"device_id" binding:"required" gorm:"uniqueIndex,OnUpdate:CASCADE,OnDelete:SET NULL"`
+	FirstClockWallTimeNanos uint64     `json:"-" binding:"required" gorm:"type:numeric"`
+	FirstClockLogMonoTime   uint64     `json:"-" binding:"required" gorm:"type:numeric"`
+	AllSegmentsProcessed    bool       `json:"-"`
+	RouteID                 string     `json:"id" binding:"required" gorm:"uniqueIndex"`
+	EndLat                  float64    `json:"end_lat"`
+	EndLng                  float64    `json:"end_lng"`
+	EndTime                 time.Time  `json:"end_time"`
+	GitBranch               string     `json:"git_branch" binding:"required"`
+	GitCommit               string     `json:"git_commit" binding:"required"`
+	GitDirty                bool       `json:"git_dirty" binding:"required"`
+	GitRemote               string     `json:"git_remote" binding:"required"`
+	InitLogMonoTime         uint64     `json:"init_log_mono_time" binding:"required" gorm:"type:numeric"`
+	IsPreserved             bool       `json:"is_preserved"`
+	IsPublic                bool       `json:"is_public"`
+	Length                  float64    `json:"length"`
+	Platform                string     `json:"platform" binding:"required"`
+	Radar                   bool       `json:"radar"`
+	StartLat                float64    `json:"start_lat"`
+	StartLng                float64    `json:"start_lng"`
+	StartTime               time.Time  `json:"start_time"`
+	URL                     string     `json:"url"`
+	Version                 string     `json:"version" binding:"required"`
+	SegmentStartTimes       Int64Array `json:"segment_start_times" gorm:"type:bigint[]"`
+	SegmentEndTimes         Int64Array `json:"segment_end_times" gorm:"type:bigint[]"`
+	SegmentNumbers          Int64Array `json:"segment_numbers" gorm:"type:bigint[]"`
 
 	CreatedAt time.Time      `json:"create_time"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
